@@ -3,9 +3,9 @@ const { githubToken, apikey } = process.env;
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { calculatePing } = require("../../events/client/ping");
 const axios = require("axios");
-const Nodeactyl = require("nodeactyl");
 const chalk = require("chalk");
 const CommandUsage = require("../../../mongo/models/usageSchema");
+const Profile = require("../../../mongo/models/profileSchema");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -24,72 +24,8 @@ module.exports = {
         `-------------------------- \n/stats \nServer: ${interaction.guild.name} (${interaction.guild.id}) \nUser: ${interaction.user.tag} (${interaction.user.id}) \nTime: ${estDate} (EST) \n--------------------------`
       )
     );
+
     try {
-      const options = {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "numeric",
-        hour12: true,
-      };
-
-      const response = await axios
-        .get("https://discordstatus.com/api/v2/incidents.json")
-        .catch(function (error) {
-          if (error.response) {
-            console.log(error.response.data);
-            console.log(error.response.status);
-            console.log(error.response.headers);
-          } else if (error.request) {
-            console.log(error.request);
-          } else {
-            console.log("Error", error.message);
-          }
-          console.log(error.config);
-        });
-      const data = response.data;
-
-      function isSameDay(d1, d2) {
-        return (
-          d1.getUTCFullYear() === d2.getUTCFullYear() &&
-          d1.getUTCMonth() === d2.getUTCMonth() &&
-          d1.getUTCDate() === d2.getUTCDate()
-        );
-      }
-
-      const today = new Date();
-      const todaysIncidents = data.incidents.filter((incident) =>
-        isSameDay(new Date(incident.created_at), today)
-      );
-
-      let DiscordApiIncident = "No incidents found";
-
-      if (todaysIncidents.length) {
-        DiscordApiIncident = todaysIncidents
-          .map((incident) => {
-            const formattedDate = new Date(
-              incident.created_at
-            ).toLocaleDateString("en-US", {
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            });
-            return `${formattedDate} - [${incident.name}](${data.page.url}/incidents/${incident.id})`;
-          })
-          .join("\n");
-      } else if (data.incidents.length) {
-        const latestIncident = data.incidents[0];
-        const formattedDate = new Date(
-          latestIncident.created_at
-        ).toLocaleDateString("en-US", {
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        });
-        DiscordApiIncident = `${formattedDate} - [${latestIncident.name}](${data.page.url}/incidents/${latestIncident.id})`;
-      }
-      //-----------------------------------------------------------------------------
       const repoOwner = "Sdriver1";
       const repoName = "Pridebot";
 
@@ -154,28 +90,7 @@ module.exports = {
 
       //--------------------------------------------------------------------------------
 
-      const Client = new Nodeactyl.NodeactylClient(
-        "https://panel.sneakyhost.xyz/",
-        apikey
-      );
-
-      let serviceMem = "Unavailable";
-      let serviceCPU = "Unavailable";
-      let serviceDk = "Unavailable";
-
-      try {
-        const serverStats = await Client.getServerUsages("2e12ab3b");
-
-        const memoryMB = serverStats.resources.memory_bytes / 1024 / 1024;
-        const cpuPercentage = serverStats.resources.cpu_absolute;
-        const diskMB = serverStats.resources.disk_bytes / 1024 / 1024;
-
-        serviceMem = `**RAM:** \`${memoryMB.toFixed(2)} MiB / 700 MiB\``;
-        serviceCPU = `**CPU:** \`${cpuPercentage.toFixed(2)}%\``;
-        serviceDk = `**Disk:** \`${diskMB.toFixed(2)} MiB / 1.22 GiB\``;
-      } catch (error) {
-        console.error("Error fetching server stats:", error);
-      }
+      const profileAmount = await Profile.countDocuments();
 
       //--------------------------------------------------------------------------------
 
@@ -192,15 +107,27 @@ module.exports = {
         process.uptime()
       )} \` \n**Start Time:** ${startTimeTimestamp}`;
 
-      const botstats = `**Version:** \`2.${commitTens}.${commitOnes}\` \n**Guilds:** \`${currentGuildCount}\` \n**Users:** \`${formattedTotalUserCount}\` \n**Commands:** \`${CommandsCount}\` \n**Commands Used:** \`${totalUsage}\``;
+      const botstats = `**Guilds:** \`${currentGuildCount}\` \n**Users:** \`${formattedTotalUserCount}\``;
 
-      const servicestats = `${serviceMem} \n${serviceCPU} \n${serviceDk}`;
+      const commandstats = `**Commands:** \`${CommandsCount}\` \n**Profiles:** \`${profileAmount}\` \n**Total Usage:** \`${totalUsage}\``;
+
+      const botversion = `**Version:** \`2.${commitTens}.${commitOnes}\` \n **Node.js Version:** \`${process.version}\` \n **Discord.js Version:** \`v${client.version}\` \n **MongoDB Version:** \`v4.4.6\``;
 
       try {
         const embed = new EmbedBuilder().setColor(0xff00ae).addFields(
           {
             name: "<:_:1108228682184654908> __Bot Stats__",
             value: botstats,
+            inline: true,
+          },
+          {
+            name: "<:_:1108228682184654908> __Command Stats__",
+            value: commandstats,
+            inline: true,
+          },
+          {
+            name: "<:_:1193823319246524486> __Bot Stats__",
+            value: botversion,
             inline: true,
           },
           {
@@ -213,16 +140,6 @@ module.exports = {
             value: ping,
             inline: true,
           },
-          {
-            name: "<:_:1193823319246524486> __Bot Usage__",
-            value: servicestats,
-            inline: true,
-          },
-          {
-            name: "<:_:1108421476148859010> __Latest Discord API Incident__",
-            value: DiscordApiIncident,
-            inline: true,
-          }
         );
 
         await interaction.editReply({ embeds: [embed] });
